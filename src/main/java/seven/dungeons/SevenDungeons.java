@@ -57,12 +57,18 @@ public class SevenDungeons extends JavaPlugin
 	public void onEnable()
 	{
 	    super.onEnable();
+
+        saveDefaultConfig();
 	    try {
             this.openConnection();
             this.initializeDatabase();
         } catch (ClassNotFoundException | SQLException | IOException e) {
+            log("An error occurred while establishing the database connection. The plugin has been disabled.", "SevenDungeons", ChatColor.RED);
             e.printStackTrace();
+            getServer().getPluginManager().disablePlugin(this);
+            return;
         }
+
 	    multiverse = this.getMultiverseCore();
 	    dungeonManager = new DungeonManager(this);
 	    portalManager = new PortalManager(this);
@@ -159,8 +165,7 @@ public class SevenDungeons extends JavaPlugin
                 return;
             }
             Class.forName("com.mysql.jdbc.Driver");
-            this.connection = DriverManager.getConnection("jdbc:mysql://" + "localhost" + ":" + "3308" + "/" + 
-            "sevendungeons", "root", "");
+            this.connection = DriverManager.getConnection(getConfig().getString("database-url") + "?allowMultiQueries=true");
             Bukkit.getConsoleSender().sendMessage(ChatColor.YELLOW + "SQL connection enabled");
         }
     }

@@ -1,0 +1,2 @@
+# JDBC formatted URL to your MySQL database
+database-url: 'jdbc:mysql://example-database'
