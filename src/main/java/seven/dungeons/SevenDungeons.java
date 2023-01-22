@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 import com.onarandombox.MultiverseCore.MultiverseCore;
 import com.onarandombox.MultiverseCore.utils.FileUtils;
@@ -58,7 +59,8 @@ public class SevenDungeons extends JavaPlugin
 	    super.onEnable();
 	    try {
             this.openConnection();
-        } catch (ClassNotFoundException | SQLException e) {
+            this.initializeDatabase();
+        } catch (ClassNotFoundException | SQLException | IOException e) {
             e.printStackTrace();
         }
 	    multiverse = this.getMultiverseCore();
@@ -161,7 +163,12 @@ public class SevenDungeons extends JavaPlugin
             "sevendungeons", "root", "");
             Bukkit.getConsoleSender().sendMessage(ChatColor.YELLOW + "SQL connection enabled");
         }
-        
+    }
+
+    public void initializeDatabase() throws IOException, SQLException {
+        String sql = new String(getClass().getResource("/db_setup.sql").openStream().readAllBytes());
+        Statement statement = connection.createStatement();
+        statement.execute(sql);
     }
 	
 	public Connection getConnection()
