@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="SevenDungeons:jar">
+    <output-path>$USER_HOME$/Desktop/7dungeons/plugins</output-path>
+    <root id="archive" name="SevenDungeons.jar">
+      <element id="module-output" name="SevenDungeons" />
+    </root>
+  </artifact>
+</component>
