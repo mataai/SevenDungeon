@@ -135,6 +135,7 @@ public class Judy extends SevenNPC {
     }
     
     public void checkPlayers() {
+        /*
         for(NPC npc : this.babies) {
             for(Player p : this.sign.getGame().getPlayers()) {
                 if(npc.isSpawned()) {
@@ -147,6 +148,7 @@ public class Judy extends SevenNPC {
                 }
             }
         }
+        */
     }
     
 

@@ -1,7 +1,7 @@
 name: SevenDungeons
 main: seven.dungeons.SevenDungeons
 version: 1.0.0
-api-version: 1.19
+api-version: 1.20
 depend: [Multiverse-Core, Citizens]
 description: Dungeon framework plugin.
 commands:
