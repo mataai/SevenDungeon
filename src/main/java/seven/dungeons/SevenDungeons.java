@@ -56,10 +56,13 @@ public class SevenDungeons extends JavaPlugin
 	public void onEnable()
 	{
 	    super.onEnable();
+	    // Dungeons live in bundle folders; the database is only needed for portals
+	    // and for /7d importdb. A failed connection is not fatal.
 	    try {
             this.openConnection();
         } catch (ClassNotFoundException | SQLException e) {
-            e.printStackTrace();
+            this.connection = null;
+            log("Database unavailable (" + e.getMessage() + "). Portals will not load and /7d importdb is disabled.", "SevenDungeons", ChatColor.YELLOW);
         }
 	    multiverse = this.getMultiverseCore();
 	    dungeonManager = new DungeonManager(this);
@@ -165,9 +168,19 @@ public class SevenDungeons extends JavaPlugin
         
     }
 	
+	/** The legacy MySQL connection, or null if it could not be opened. */
 	public Connection getConnection()
     {
         return this.connection;
+    }
+	
+	public boolean hasDatabase()
+    {
+        try {
+            return this.connection != null && !this.connection.isClosed();
+        } catch (SQLException e) {
+            return false;
+        }
     }
 	
 	static public String message(String message)

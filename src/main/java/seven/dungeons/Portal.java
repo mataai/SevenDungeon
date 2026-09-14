@@ -53,6 +53,10 @@ public class Portal {
      */
     public void savePortal()
     {
+        if(!this.plugin.hasDatabase()) {
+            SevenDungeons.log("Portal \"" + this.id + "\" not saved: database unavailable.", "SevenDungeons", ChatColor.RED);
+            return;
+        }
         try {
             Connection connection = this.plugin.getConnection();
             PreparedStatement statement = connection.prepareStatement("SELECT * from portals where id=?");
@@ -93,6 +97,10 @@ public class Portal {
     // Removes a portal from the database
     public void removePortalConfig()
     {
+        if(!this.plugin.hasDatabase()) {
+            SevenDungeons.log("Portal \"" + this.id + "\" not removed from database: database unavailable.", "SevenDungeons", ChatColor.RED);
+            return;
+        }
         try {
             PreparedStatement delete = this.plugin.getConnection().prepareStatement("DELETE FROM portals where id=?");
             delete.setString(1, this.id);

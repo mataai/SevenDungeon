@@ -1,11 +1,10 @@
 package seven.dungeons.managers;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.WeatherType;
@@ -17,6 +16,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 
 import seven.dungeons.Dungeon;
+import seven.dungeons.bundle.AnchorStore;
 import seven.dungeons.DungeonPlayer;
 import seven.dungeons.DungeonTeam;
 import seven.dungeons.Game;
@@ -48,31 +48,27 @@ public class GameManager {
         GameManager.games.remove(game);
     }
     
+    /** Copies the dungeon's messages (from its bundle) into the game. */
     public void getMessages(Game game) {
-        try {
-            Connection connection = this.plugin.getConnection();
-            PreparedStatement ps = connection.prepareStatement("select * from messages where dungeon_id=?");
-            ps.setString(1, game.getDungeon().getId());
-            ResultSet rs = ps.executeQuery();
-            String message;
-            int id;
-            while(rs.next()) {
-                id = rs.getInt("id");
-                message = rs.getString("message");
-                game.addMessage(id, message);
-            }
-        }catch(SQLException e) {
-            e.printStackTrace();
+        for(Map.Entry<Integer, String> entry : game.getDungeon().getMessages().entrySet()) {
+            game.addMessage(entry.getKey(), entry.getValue());
         }
     }
     
     public void compile(Game game) {
         World world = game.getWorld();
         ArrayList<ActivableSign> gameSigns = game.getSigns();
-        for(Location l : game.getDungeon().getSigns()) {
-            Location location = new Location(world,l.getBlockX(),l.getBlockY(),l.getBlockZ());
+        // The anchor file is the source of truth: only listed positions are compiled.
+        List<Location> anchors = game.getDungeon().getAnchors().getLocations(world);
+        for(Location location : anchors) {
             Block block = location.getBlock();
-            if(block.getType().equals(Material.OAK_SIGN) || block.getType().equals(Material.OAK_WALL_SIGN)) {
+            if(!AnchorStore.isCommandSign(block)) {
+                SevenDungeons.log("Dungeon \"" + game.getDungeon().getId() + "\": anchor at " + AnchorStore.format(location)
+                        + " is not a command sign (found " + block.getType() + "). Remove it with /7d delanchor or place the sign back.",
+                        "SevenDungeons", ChatColor.RED);
+                continue;
+            }
+            if(block.getState() instanceof Sign) {
                 Sign sign = (Sign)(block.getState());
                 String firstLine = sign.getLine(0);
                 if(firstLine != null) {
@@ -160,10 +156,8 @@ public class GameManager {
                 ((BlockSign) ds).off();
             }
         }
-        for(Location l : game.getDungeon().getSigns()) {
-            Location location = new Location(world,l.getBlockX(),l.getBlockY(),l.getBlockZ());
-            Block block = location.getBlock();
-            if(block.getType().equals(Material.OAK_SIGN) || block.getType().equals(Material.OAK_WALL_SIGN)) {
+        for(Location location : anchors) {
+            if(AnchorStore.isCommandSign(location.getBlock())) {
                 location.getBlock().setType(Material.AIR);
             }
         }

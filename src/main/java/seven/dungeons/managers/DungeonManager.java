@@ -1,11 +1,12 @@
 package seven.dungeons.managers;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -13,11 +14,11 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
 import seven.dungeons.Dungeon;
 import seven.dungeons.SevenDungeons;
+import seven.dungeons.bundle.DungeonBundle;
 
 public class DungeonManager {
     
@@ -26,17 +27,12 @@ public class DungeonManager {
     public static Material[] gems = {Material.QUARTZ, Material.EMERALD};
     public static ArrayList<Dungeon> dungeons = new ArrayList<Dungeon>();
     
-    public FileConfiguration dungeonConfig;
-    public File dungeonFile;
-    
     public DungeonManager (SevenDungeons plugin)
     {
         this.plugin = plugin;
         
-        //Load dungeons from database
+        //Load dungeons from their bundle folders
         loadDungeons();
-        
-        
     }
     
     public Dungeon getDungeon(String id)
@@ -76,14 +72,13 @@ public class DungeonManager {
             return false;
         }
         
+        // Creates the bundle folder with default settings
         Dungeon dungeon = new Dungeon(this.plugin, worldName , id);
-        /*File worldfile = dungeon.getWorldFile();*/
-        
         dungeon.saveDungeon();
         return true;
     }
     
-    // Remove a dungeon from the config file
+    // Remove a dungeon and delete its bundle folder (the world is kept)
     public boolean removeDungeon(String id)
     {
         Dungeon dg = this.getDungeon(id);
@@ -201,6 +196,16 @@ public class DungeonManager {
                 return false;
             }
             break;
+        case "version":
+            if(value.equalsIgnoreCase("bump") || value.equals("+")) {
+                if(!dungeon.bumpVersion()) {
+                    return false;
+                }
+            }
+            else if(!dungeon.setVersion(value)) {
+                return false;
+            }
+            break;
         default : return false;
         }
         dungeon.saveDungeon();
@@ -255,78 +260,114 @@ public class DungeonManager {
         
         sender.sendMessage(ChatColor.GREEN + "" + ChatColor.BOLD + "SevenDungeons "
                 + ChatColor.RESET + ": " + ChatColor.YELLOW + d.getId() + ChatColor.RESET +
-                " info :\n World : " + d.getWorldName() + "\n Name : " + d.getName() + "\n Players : " + d.getNbPlayers() +
+                " info :\n World : " + d.getWorldName() + "\n Name : " + d.getName() + "\n Version : " + d.getVersion() + "\n Players : " + d.getNbPlayers() +
                 "\n Time : " + d.getTime() + "\n Life : " + d.getLife() + "\n Time limit : " + d.getTimeLimit() +
                 "\n Hunger : " + d.isHunger() + "\n Magic : " + d.isMagic() + "\n Godmode : " + d.isGodmode() +
-                "\n Time stop : " + d.isTimeStop() + "\n Weather : " + d.getWeather() + "\n Gem : " + gems[d.getGem()].toString());
+                "\n Time stop : " + d.isTimeStop() + "\n Weather : " + d.getWeather() + "\n Gem : " + gems[d.getGem()].toString() +
+                "\n Anchors : " + d.getAnchors().size() + "\n Messages : " + d.getMessages().size() +
+                "\n Bundle : " + d.getBundle().getDirectory().getPath());
         return true;
     }
     
+    /** Loads every bundle found under plugins/SevenDungeons/dungeons/. */
     public void loadDungeons() {
-        String id, world, weather, name;
-        int life, nbPlayers, time, timeLimit, gem;
-        boolean timeStop, hunger, magic, godmode;
-        try {
-            PreparedStatement query = this.plugin.getConnection().prepareStatement("SELECT * FROM dungeons");
-            ResultSet rs = query.executeQuery();
-            while(rs.next()) {
-                id = rs.getString("id");
-                world = rs.getString("world");
-                weather = rs.getString("weather");
-                life = rs.getInt("life");
-                nbPlayers = rs.getInt("nbPlayers");
-                time = rs.getInt("time");
-                timeLimit = rs.getInt("timeLimit");
-                timeStop = rs.getBoolean("timeStop");
-                hunger = rs.getBoolean("hunger");
-                magic = rs.getBoolean("magic");
-                godmode = rs.getBoolean("godmode");
-                gem = rs.getInt("gem");
-                name = rs.getString("name");
-                
-                Dungeon dungeon = new Dungeon(this.plugin, world, id);
-                dungeon.setLife(life);
-                dungeon.setGodmode(godmode);
-                dungeon.setHunger(hunger);
-                dungeon.setMagic(magic);
-                dungeon.setNbPlayers(nbPlayers);
-                dungeon.setTime(time);
-                dungeon.setTimeLimit(timeLimit);
-                dungeon.setWeather(weather);
-                dungeon.setTimeStop(timeStop);
-                dungeon.setGem(gem);
-                dungeon.setName(name);
+        int count = 0;
+        for(String id : DungeonBundle.listIds(this.plugin)) {
+            String world = DungeonBundle.readWorldName(this.plugin, id);
+            if(world == null || world.isEmpty()) {
+                SevenDungeons.log("Dungeon bundle \"" + id + "\" has no world name, skipped.", "SevenDungeons", ChatColor.RED);
+                continue;
             }
-            SevenDungeons.log("Dungeons loaded.", "SevenDungeons", ChatColor.GREEN);
-        }catch(SQLException e) {
-            e.printStackTrace();
+            int format = DungeonBundle.readFormat(this.plugin, id);
+            if(format > DungeonBundle.FORMAT_VERSION) {
+                SevenDungeons.log("Dungeon bundle \"" + id + "\" uses format " + format + ", this plugin supports up to "
+                        + DungeonBundle.FORMAT_VERSION + ". Skipped, update the plugin.", "SevenDungeons", ChatColor.RED);
+                continue;
+            }
+            if(!this.plugin.worldManager.isInFolder(world)) {
+                SevenDungeons.log("Dungeon \"" + id + "\": world folder \"" + world + "\" not found. Loaded anyway, games will fail until it exists.", "SevenDungeons", ChatColor.YELLOW);
+            }
+            new Dungeon(this.plugin, world, id); // constructor loads settings, anchors and messages
+            count++;
         }
+        SevenDungeons.log(count + " dungeon(s) loaded from " + DungeonBundle.getRootFolder(this.plugin).getPath() + ".", "SevenDungeons", ChatColor.GREEN);
     }
     
-    public void saveSigns(Dungeon dungeon)
+    /**
+     * Migration helper: rebuilds bundles from the legacy MySQL tables (dungeons,
+     * messages, sign). Pass null to import every dungeon of the database.
+     * Existing bundles are overwritten with the database content.
+     *
+     * @return number of dungeons imported, or -1 if the database is unavailable or failed
+     */
+    public int importFromDatabase(String onlyId)
     {
-        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Connection connection = plugin.getConnection();
-                    PreparedStatement delete = connection.prepareStatement("DELETE FROM sign WHERE id=?");
-                    delete.setString(1, dungeon.getId());
-                    delete.execute();
-                    
-                    for(Location l : dungeon.getSigns()) {
-                        PreparedStatement insert = connection.prepareStatement("INSERT INTO sign (id, x, y, z) VALUES (?,?,?,?)");
-                        insert.setString(1, dungeon.getId());
-                        insert.setInt(2, l.getBlockX());
-                        insert.setInt(3, l.getBlockY());
-                        insert.setInt(4, l.getBlockZ());
-                        insert.execute();
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
+        Connection connection = this.plugin.getConnection();
+        if(connection == null) {
+            return -1;
+        }
+        int count = 0;
+        try {
+            PreparedStatement query;
+            if(onlyId == null) {
+                query = connection.prepareStatement("SELECT * FROM dungeons");
             }
-        });
+            else {
+                query = connection.prepareStatement("SELECT * FROM dungeons WHERE id=?");
+                query.setString(1, onlyId);
+            }
+            ResultSet rs = query.executeQuery();
+            while(rs.next()) {
+                String id = rs.getString("id");
+                String world = rs.getString("world");
+                Dungeon dungeon = this.getDungeon(id);
+                if(dungeon == null) {
+                    dungeon = new Dungeon(this.plugin, world, id);
+                }
+                else if(!dungeon.getWorldName().equals(world)) {
+                    SevenDungeons.log("Dungeon \"" + id + "\": database world \"" + world + "\" differs from bundle world \"" + dungeon.getWorldName() + "\", bundle kept.", "SevenDungeons", ChatColor.YELLOW);
+                }
+                dungeon.setLife(rs.getInt("life"));
+                dungeon.setGodmode(rs.getBoolean("godmode"));
+                dungeon.setHunger(rs.getBoolean("hunger"));
+                dungeon.setMagic(rs.getBoolean("magic"));
+                dungeon.setNbPlayers(rs.getInt("nbPlayers"));
+                dungeon.setTime(rs.getInt("time"));
+                dungeon.setTimeLimit(rs.getInt("timeLimit"));
+                dungeon.setWeather(rs.getString("weather"));
+                dungeon.setTimeStop(rs.getBoolean("timeStop"));
+                dungeon.setGem(rs.getInt("gem"));
+                dungeon.setName(rs.getString("name"));
+                dungeon.saveDungeon();
+                
+                // Messages
+                PreparedStatement mq = connection.prepareStatement("SELECT id, message FROM messages WHERE dungeon_id=?");
+                mq.setString(1, id);
+                ResultSet mrs = mq.executeQuery();
+                Map<Integer, String> messages = new LinkedHashMap<Integer, String>();
+                while(mrs.next()) {
+                    messages.put(mrs.getInt("id"), mrs.getString("message"));
+                }
+                dungeon.setMessages(messages);
+                
+                // Sign positions
+                PreparedStatement sq = connection.prepareStatement("SELECT x, y, z FROM sign WHERE id=?");
+                sq.setString(1, id);
+                ResultSet srs = sq.executeQuery();
+                ArrayList<Location> anchors = new ArrayList<Location>();
+                while(srs.next()) {
+                    anchors.add(new Location(Bukkit.getWorld(world), srs.getInt("x"), srs.getInt("y"), srs.getInt("z")));
+                }
+                dungeon.getAnchors().replaceAll(anchors);
+                
+                SevenDungeons.log("Imported dungeon \"" + id + "\" (" + messages.size() + " messages, " + anchors.size() + " anchors) into " + dungeon.getBundle().getDirectory().getPath());
+                count++;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return -1;
+        }
+        return count;
     }
     
     public Material getGem(int i) {

@@ -164,6 +164,10 @@ public class PortalManager {
         String id, dungeon, world;
         int x1, y1, z1, x2, y2, z2;
         float lobby_x, lobby_y, lobby_z;
+        if(!this.plugin.hasDatabase()) {
+            SevenDungeons.log("Portals not loaded: database unavailable.", "SevenDungeons", ChatColor.YELLOW);
+            return false;
+        }
         try {
             PreparedStatement statement = this.plugin.getConnection().prepareStatement("SELECT * FROM portals");
             ResultSet rs = statement.executeQuery();

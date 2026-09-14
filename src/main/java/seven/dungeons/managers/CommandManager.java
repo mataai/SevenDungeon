@@ -1,10 +1,12 @@
 package seven.dungeons.managers;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -14,6 +16,8 @@ import org.bukkit.entity.Player;
 import seven.dungeons.Dungeon;
 import seven.dungeons.Game;
 import seven.dungeons.SevenDungeons;
+import seven.dungeons.bundle.AnchorStore;
+import seven.dungeons.bundle.DungeonBundle;
 
 public class CommandManager {
     
@@ -81,7 +85,15 @@ public class CommandManager {
             break;
             case "portalinfo" : this.portalInfo(sender,args);
             break;
-            case "savesigns" : this.saveSigns(player, args);
+            case "savesigns" : case "importsigns" : this.importSigns(player, args);
+            break;
+            case "importdb" : this.importDatabase(sender, args);
+            break;
+            case "anchors" : this.listAnchors(sender, args);
+            break;
+            case "addanchor" : this.addAnchor(player, args);
+            break;
+            case "delanchor" : case "removeanchor" : this.removeAnchor(player, args);
             break;
             case "signal" : this.signal(sender, args);
             break;
@@ -322,23 +334,143 @@ public class CommandManager {
         }
     }
 
-    public void saveSigns(Player player, String[] args) {
+    /*
+     * /7d importsigns <dungeon>
+     * Migration helper. Rebuilds the anchor file by scanning the template world
+     * from the origin up to the player's position (legacy "savesigns" behaviour).
+     */
+    public void importSigns(Player player, String[] args) {
         Dungeon dungeon = this.plugin.dungeonManager.getDungeon(args[1]);
         if(dungeon == null) {
-            player.sendMessage(SevenDungeons.message("You are not in a dungeon !"));
+            player.sendMessage(SevenDungeons.message("This dungeon doesn't exist."));
             return;
         }
         if(!dungeon.getWorldName().equals(player.getWorld().getName())) {
-            player.sendMessage(SevenDungeons.message("You are not in the right world to save this dungeon's signs."));
+            player.sendMessage(SevenDungeons.message("You must stand in the dungeon's world to scan it."));
             return;
         }
         Location location = player.getLocation();
-        if(location.getBlockX() + location.getBlockY() + location.getBlockY() > 2000) {
-            player.sendMessage(SevenDungeons.message("This area is too big to be saved. Your dungeon must be smaller."));
+        if(location.getBlockX() + location.getBlockY() + location.getBlockZ() > 2000) {
+            player.sendMessage(SevenDungeons.message("This area is too big to be scanned. Stand closer to the origin."));
             return;
         }
-        dungeon.findSigns(location);
-        player.sendMessage(SevenDungeons.message("All signs were saved."));
+        int count = dungeon.importSignsFromWorld(location);
+        player.sendMessage(SevenDungeons.message(count + " anchor(s) found and saved. Signs placed from now on are registered automatically."));
+    }
+
+    /*
+     * /7d importdb <dungeon|all>
+     * Migration helper. Rebuilds dungeon bundles (settings, messages, anchors)
+     * from the legacy MySQL tables.
+     */
+    public void importDatabase(CommandSender sender, String[] args) {
+        if(!this.plugin.hasDatabase()) {
+            sender.sendMessage(SevenDungeons.message("No database connection. Check the console for the connection error."));
+            return;
+        }
+        String id = args[1].equalsIgnoreCase("all") ? null : args[1];
+        int count = this.plugin.dungeonManager.importFromDatabase(id);
+        if(count < 0) {
+            sender.sendMessage(SevenDungeons.message("Database import failed, see console."));
+            return;
+        }
+        if(count == 0) {
+            sender.sendMessage(SevenDungeons.message("No dungeon found in the database" + (id == null ? "." : " with id \"" + id + "\".")));
+            return;
+        }
+        sender.sendMessage(SevenDungeons.message(count + " dungeon(s) imported into " + DungeonBundle.getRootFolder(this.plugin).getPath() + "."));
+    }
+
+    /*
+     * /7d anchors <dungeon>
+     * Lists the anchors of the file and flags the ones that no longer point at a command sign.
+     */
+    public void listAnchors(CommandSender sender, String[] args) {
+        Dungeon dungeon = this.plugin.dungeonManager.getDungeon(args[1]);
+        if(dungeon == null) {
+            sender.sendMessage(SevenDungeons.message("This dungeon doesn't exist."));
+            return;
+        }
+        AnchorStore anchors = dungeon.getAnchors();
+        List<Location> stale = anchors.findStale();
+        StringBuilder sb = new StringBuilder();
+        sb.append(ChatColor.GREEN).append("").append(ChatColor.BOLD).append("SevenDungeons ").append(ChatColor.RESET)
+          .append(": ").append(ChatColor.YELLOW).append(dungeon.getId()).append(ChatColor.RESET)
+          .append(" has ").append(anchors.size()).append(" anchor(s) in ").append(anchors.getFile().getPath());
+        if(stale == null) {
+            sb.append("\n").append(ChatColor.GRAY).append("Template world not loaded, cannot check the signs.");
+        }
+        else if(!stale.isEmpty()) {
+            sb.append("\n").append(ChatColor.RED).append(stale.size()).append(" anchor(s) have no command sign:");
+            for(Location l : stale) {
+                sb.append("\n").append(ChatColor.RED).append(" - ").append(AnchorStore.format(l));
+            }
+        }
+        else {
+            sb.append("\n").append(ChatColor.GREEN).append("All anchors point at a command sign.");
+        }
+        sender.sendMessage(sb.toString());
+    }
+
+    /*
+     * /7d addanchor <dungeon>
+     * Registers the command sign the player is looking at.
+     */
+    public void addAnchor(Player player, String[] args) {
+        Dungeon dungeon = this.plugin.dungeonManager.getDungeon(args[1]);
+        if(dungeon == null) {
+            player.sendMessage(SevenDungeons.message("This dungeon doesn't exist."));
+            return;
+        }
+        Block target = this.targetBlock(player, dungeon);
+        if(target == null) {
+            return;
+        }
+        if(!AnchorStore.isCommandSign(target)) {
+            player.sendMessage(SevenDungeons.message("Look at a sign whose first line starts with \"" + AnchorStore.COMMAND_PREFIX + "\"."));
+            return;
+        }
+        if(dungeon.addSign(target.getLocation())) {
+            player.sendMessage(SevenDungeons.message("Anchor " + AnchorStore.format(target.getLocation()) + " registered."));
+        }
+        else {
+            player.sendMessage(SevenDungeons.message("This sign is already registered."));
+        }
+    }
+
+    /*
+     * /7d delanchor <dungeon>
+     * Unregisters the anchor the player is looking at (any block, so stale anchors can be cleaned).
+     */
+    public void removeAnchor(Player player, String[] args) {
+        Dungeon dungeon = this.plugin.dungeonManager.getDungeon(args[1]);
+        if(dungeon == null) {
+            player.sendMessage(SevenDungeons.message("This dungeon doesn't exist."));
+            return;
+        }
+        Block target = this.targetBlock(player, dungeon);
+        if(target == null) {
+            return;
+        }
+        if(dungeon.removeSign(target.getLocation())) {
+            player.sendMessage(SevenDungeons.message("Anchor " + AnchorStore.format(target.getLocation()) + " removed."));
+        }
+        else {
+            player.sendMessage(SevenDungeons.message("This block is not a registered anchor."));
+        }
+    }
+
+    private Block targetBlock(Player player, Dungeon dungeon) {
+        if(!dungeon.getWorldName().equals(player.getWorld().getName())) {
+            player.sendMessage(SevenDungeons.message("You must stand in the dungeon's world."));
+            return null;
+        }
+        Block target = player.getTargetBlockExact(6);
+        if(target == null) {
+            player.sendMessage(SevenDungeons.message("Look at a block within 6 blocks."));
+            return null;
+        }
+        return target;
     }
     
     public void npcCommand(Player player, String[] args) {

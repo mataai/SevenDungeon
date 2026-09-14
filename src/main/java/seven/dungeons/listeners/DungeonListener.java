@@ -42,7 +42,9 @@ import net.citizensnpcs.api.event.NPCRightClickEvent;
 import seven.dungeons.DungeonPlayer;
 import seven.dungeons.DungeonTeam;
 import seven.dungeons.Game;
+import seven.dungeons.Dungeon;
 import seven.dungeons.SevenDungeons;
+import seven.dungeons.bundle.AnchorStore;
 import seven.dungeons.managers.GameManager;
 import seven.dungeons.signs.AnimatedSign;
 import seven.dungeons.signs.CaptorSign;
@@ -367,6 +369,38 @@ public class DungeonListener implements Listener {
         line = ChatColor.translateAlternateColorCodes('&', line);
         e.setLine(i, line);
       } 
+    }
+
+    // Keep the anchor file in sync: a command sign written in a dungeon's template
+    // world is registered, and a registered sign rewritten without the prefix is dropped.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onAnchorSignChange(SignChangeEvent e) {
+        Dungeon dungeon = this.plugin.dungeonManager.getDungeonByWorld(e.getBlock().getWorld().getName());
+        if(dungeon == null) {
+            return;
+        }
+        Location location = e.getBlock().getLocation();
+        if(AnchorStore.isCommandLine(e.getLine(0))) {
+            if(dungeon.addSign(location)) {
+                e.getPlayer().sendMessage(SevenDungeons.message("Anchor " + AnchorStore.format(location) + " registered for dungeon " + dungeon.getId() + "."));
+            }
+        }
+        else if(dungeon.removeSign(location)) {
+            e.getPlayer().sendMessage(SevenDungeons.message("Anchor " + AnchorStore.format(location) + " removed from dungeon " + dungeon.getId() + "."));
+        }
+    }
+
+    // Keep the anchor file in sync: breaking a registered sign in the template world unregisters it.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onAnchorBreak(BlockBreakEvent e) {
+        Dungeon dungeon = this.plugin.dungeonManager.getDungeonByWorld(e.getBlock().getWorld().getName());
+        if(dungeon == null) {
+            return;
+        }
+        Location location = e.getBlock().getLocation();
+        if(dungeon.removeSign(location)) {
+            e.getPlayer().sendMessage(SevenDungeons.message("Anchor " + AnchorStore.format(location) + " removed from dungeon " + dungeon.getId() + "."));
+        }
     }
     
     //If arrow hit a minecart from minecart tour, cancel collision
