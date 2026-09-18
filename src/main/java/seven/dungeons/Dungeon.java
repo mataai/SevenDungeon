@@ -84,7 +84,7 @@ public class Dungeon {
     //Get the World File of this dungeon.
     public File getWorldFile()
     {
-        File file = new File(this.plugin.multiverse.getServerFolder().getPath(), this.worldName);
+        File file = new File(Bukkit.getWorldContainer(), this.worldName);
         return file;
     }
 

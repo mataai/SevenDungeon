@@ -1,91 +1,85 @@
 package seven.dungeons.managers;
 
-import java.io.File;
-
 import org.bukkit.Difficulty;
-import org.bukkit.WorldType;
 import org.bukkit.World.Environment;
-
-import com.onarandombox.MultiverseCore.api.MultiverseWorld;
+import org.bukkit.WorldType;
+import org.mvplugins.multiverse.core.world.LoadedMultiverseWorld;
+import org.mvplugins.multiverse.core.world.MultiverseWorld;
+import org.mvplugins.multiverse.core.world.options.CreateWorldOptions;
+import org.mvplugins.multiverse.core.world.options.LoadWorldOptions;
+import org.mvplugins.multiverse.core.world.options.RemoveWorldOptions;
+import org.mvplugins.multiverse.core.world.options.UnloadWorldOptions;
 
 import seven.dungeons.SevenDungeons;
 
 public class WorldManager {
 
-private SevenDungeons plugin;
-    
-    public WorldManager(SevenDungeons plugin)
-    {
+    private SevenDungeons plugin;
+
+    public WorldManager(SevenDungeons plugin) {
         this.plugin = plugin;
     }
-    
-    public boolean isMVLoaded(String world)
-    {   
-        for(MultiverseWorld MVw : this.plugin.multiverse.getMVWorldManager().getMVWorlds())
-        {
-            if(MVw.getName().equals(world))
-            {
+
+    public boolean isMVLoaded(String world) {
+        for (MultiverseWorld MVw : this.plugin.multiverse.getWorldManager().getWorlds()) {
+            if (MVw.getName().equals(world)) {
                 return true;
             }
         }
         return false;
     }
-    
-    public boolean isInFolder(String world)
-    {
-        File file = new File(this.plugin.multiverse.getServerFolder().getPath(), world);
-        if(file.exists() && file.isDirectory())
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+
+    public boolean isInFolder(String world) {
+        // TODO fix
+        return false;
+        // File file = new File(this.plugin.multiverse.getServerFolder().getPath(), world);
+        // return file.exists() && file.isDirectory();
     }
-    
-    public boolean isMVUnloaded(String world)
-    {
-        for(String w : this.plugin.multiverse.getMVWorldManager().getUnloadedWorlds())
-        {
-            if(w.equals(world)) return true;
-            
+
+    public boolean isMVUnloaded(String world) {
+        for (MultiverseWorld w : this.plugin.multiverse.getWorldManager().getUnloadedWorlds()) {
+            if (w.getName().equals(world))
+                return true;
+
         }
         return false;
     }
-    
-    public void load(String world)
-    {
-        if(this.isMVLoaded(world)) return;
-        
-        if(this.isMVUnloaded(world))
-        {
-            //LOAD
-            this.plugin.multiverse.getMVWorldManager().loadWorld(world);
-            MultiverseWorld mw = this.plugin.multiverse.getMVWorldManager().getMVWorld(world);
-            mw.setDifficulty(Difficulty.NORMAL);
+
+    public void load(String worldName) {
+        if (this.isMVLoaded(worldName))
             return;
+
+        if (this.isMVUnloaded(worldName)) {
+            // LOAD
+            this.plugin.multiverse.getWorldManager().getWorld(worldName).peek(world -> {
+                this.plugin.multiverse.getWorldManager().loadWorld(LoadWorldOptions.world(world));
+                world.setDifficulty(Difficulty.NORMAL);
+            });
         }
-        if(this.isInFolder(world))
-        {
-            //ADD
-            this.plugin.multiverse.getMVWorldManager().addWorld(world, Environment.NORMAL, null, WorldType.FLAT, null, null);
+        if (this.isInFolder(worldName)) {
+            // ADD
+            this.plugin.multiverse.getWorldManager().createWorld(
+                    CreateWorldOptions.worldName(worldName)
+                            .environment(Environment.NORMAL)
+                            .worldType(WorldType.FLAT)
+                    );
         }
     }
-    
-    public void unload(String world)
-    {
-        if(this.isMVLoaded(world))
-        {
-            this.plugin.multiverse.getMVWorldManager().unloadWorld(world);
-        }
+
+    public void unload(String worldName) {
+        this.plugin.multiverse.getWorldManager().getWorld(worldName).peek(world -> {
+            if (world.isLoaded()) {
+                this.plugin.multiverse.getWorldManager()
+                        .unloadWorld(UnloadWorldOptions.world((LoadedMultiverseWorld) world));
+            }
+        });
     }
-    
-    public void remove(String world)
-    {
-        if(this.isMVLoaded(world))
-        {
-            this.plugin.multiverse.getMVWorldManager().removeWorldFromConfig(world);
-        }
+
+    public void remove(String worldName) {
+        this.plugin.multiverse.getWorldManager().getWorld(worldName).peek(world -> {
+            if (world.isLoaded()) {
+                this.plugin.multiverse.getWorldManager().removeWorld(RemoveWorldOptions.world(world));
+            }
+        });
     }
 }

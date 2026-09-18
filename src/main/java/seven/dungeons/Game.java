@@ -153,12 +153,12 @@ public class Game {
         this.messages.clear();
         this.plugin.gameManager.removeGame(this);
         this.plugin.worldManager.remove(this.instanceName);
-        try {
-            File file = new File(this.plugin.multiverse.getServerFolder().getPath(), this.instanceName);
-            FileUtils.deleteFolder(file);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // try {
+        //     File file = new File(this.plugin.multiverse.getServerFolder().getPath(), this.instanceName);
+        //     FileUtils.deleteFolder(file);
+        // } catch (Exception e) {
+        //     e.printStackTrace();
+        // }
     }
     
     // Activates a signal
