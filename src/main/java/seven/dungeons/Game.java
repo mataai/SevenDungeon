@@ -75,11 +75,12 @@ public class Game {
         // Creating a new instance world file for this game
         File sourceWorldFile = this.dungeon.getWorldFile();
         File instanceWorldFile = new File(sourceWorldFile.getParent(), this.instanceName);
-        try {
-            FileUtils.copyFolder(sourceWorldFile, instanceWorldFile);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // TODO FIX
+        // try {
+        //     FileUtils.copyFolder(sourceWorldFile, instanceWorldFile);
+        // } catch (Exception e) {
+        //     e.printStackTrace();
+        // }
         File uidFile = new File(instanceWorldFile, "uid.dat");
         uidFile.delete();
         this.plugin.worldManager.load(this.instanceName);
